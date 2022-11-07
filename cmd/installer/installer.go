@@ -21,7 +21,7 @@ func InstallHelmRelease(version *semver.Version) {
 			"--namespace", "united-manufacturing-hub",
 		).CombinedOutput()
 	} else {
-		tools.PrintInfo("Using version %s", 1, *version)
+		tools.PrintInfo("Using version %s", 1, version.String())
 		/* #nosec G204 semver validation should prevent command injection */
 		output, err = exec.Command(
 			"helm",
