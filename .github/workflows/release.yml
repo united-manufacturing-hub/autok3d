@@ -14,8 +14,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '^1.19.2'
-          check-latest: true
+          go-version: '^1.19.3'
           cache: true
           cache-dependency-path: go.sum
 
