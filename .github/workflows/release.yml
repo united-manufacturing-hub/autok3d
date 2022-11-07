@@ -5,11 +5,8 @@ on:
       - 'v*.*.*' # Push events to matching v*, i.e. v1.0, v20.15.10
 jobs:
   run:
-    name: Run
-    runs-on: ${{ matrix.operating-system }}
-    strategy:
-      matrix:
-        operating-system: [windows-latest]
+    name: Build & Release
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3

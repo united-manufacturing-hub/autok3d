@@ -6,11 +6,8 @@ on:
       - main
 jobs:
   run:
-    name: Run
-    runs-on: ${{ matrix.operating-system }}
-    strategy:
-      matrix:
-        operating-system: [windows-latest]
+    name: Build
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
