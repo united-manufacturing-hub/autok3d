@@ -12,10 +12,6 @@ import (
 
 func main() {
 	parser := argparse.NewParser("umh", "United Manufacturing Hub")
-	k3dUseLocalNetwork := parser.Flag(
-		"",
-		"k3d-local-network",
-		&argparse.Options{Help: "Enables --api-port 127.0.0.1:6443 for k3d cluster", Required: false})
 	chartVersion := parser.String(
 		"v",
 		"version",
@@ -25,6 +21,11 @@ func main() {
 		"f",
 		"force",
 		&argparse.Options{Help: "Force overwrite of existing cluster", Required: false})
+
+	k3dUseLocalNetwork := parser.Flag(
+		"",
+		"k3d-local-network",
+		&argparse.Options{Help: "Enables --api-port 127.0.0.1:6443 for k3d cluster", Required: false})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
