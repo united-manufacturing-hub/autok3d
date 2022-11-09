@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Masterminds/semver"
 	"github.com/akamensky/argparse"
 	"github.com/united-manufacturing-hub/autok3d/cmd/checks"
+	"github.com/united-manufacturing-hub/autok3d/cmd/github"
 	"github.com/united-manufacturing-hub/autok3d/cmd/installer"
 	"github.com/united-manufacturing-hub/autok3d/cmd/tools"
 	"os"
@@ -27,6 +29,11 @@ func main() {
 		"k3d-local-network",
 		&argparse.Options{Help: "Enables --api-port 127.0.0.1:6443 for k3d cluster", Required: false})
 
+	gitBranchName := parser.String(
+		"",
+		"git-branch",
+		&argparse.Options{Help: "[NYIgit] Use git branch instead chart version", Required: false})
+
 	err := parser.Parse(os.Args)
 	if err != nil {
 		tools.PrintErrorAndExit(err, "Error parsing arguments", "", 0)
@@ -40,10 +47,19 @@ func main() {
 		}
 	}
 
+	if *chartVersion != "" && *gitBranchName != "" {
+		tools.PrintErrorAndExit(err, "Error: --version and --git-branch are mutually exclusive", "", 0)
+	}
+
+	fmt.Printf("fO: %v, kUL: %v, cS: %v\n", *forceOverwrite, *k3dUseLocalNetwork, chartSemver)
+
 	checks.CheckIfToolsExist()
 	installer.CheckIfAlreadyInstalled(forceOverwrite)
 	installer.CreateK3dCluster(k3dUseLocalNetwork)
 	installer.CreateNamespace()
+
+	_ = github.MakeFakeRelease(gitBranchName)
+
 	installer.AddUMHRepo()
 	installer.UpdateHelmRepo()
 	installer.InstallHelmRelease(chartSemver)
