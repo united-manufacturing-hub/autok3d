@@ -141,6 +141,12 @@ func CheckIfAlreadyInstalled(forceOverwrite *bool) {
 			tools.PrintInfo("Not installed yet", 1)
 			return
 		}
+		if strings.Contains(
+			string(output),
+			"Error in configuration: context was not found for specified context: k3d-united-manufacturing-hub") {
+			tools.PrintInfo("Not installed yet", 1)
+			return
+		}
 		tools.PrintErrorAndExit(err, "Error checking if already installed: ", string(output), 1)
 	}
 	tools.PrintErrorAndExit(nil, "Already installed. Use --force to overwrite", "", 1)
