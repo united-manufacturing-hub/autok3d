@@ -78,6 +78,26 @@ func PatchRelease(branchName *string, version *semver.Version) {
 			tools.PrintErrorAndExit(err, "Error executing kubectl set image", string(output), 1)
 		}
 
+		// try patch init container
+		output, err = exec.Command(
+			"kubectl",
+			"patch",
+			"deployment",
+			"-n",
+			"united-manufacturing-hub",
+			deploymentName,
+			"--type=json",
+			"-p",
+			fmt.Sprintf(
+				"[{\"op\": \"replace\", \"path\": \"/spec/template/spec/initContainers/0/image\", \"value\": \"%s:%s\"}]",
+				umhDockerVersion[1],
+				*bN)).CombinedOutput()
+		if err != nil {
+			tools.PrintWarning(
+				fmt.Sprintf("Error executing kubectl set image for init container: %s", string(output)),
+				2)
+		}
+
 	}
 
 }
