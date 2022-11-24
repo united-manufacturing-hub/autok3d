@@ -54,13 +54,13 @@ func main() {
 	fmt.Printf("fO: %v, kUL: %v, cS: %v\n", *forceOverwrite, *k3dUseLocalNetwork, chartSemver)
 
 	checks.CheckIfToolsExist()
+	hasFakeRelease := github.MakeFakeRelease(gitBranchName, chartSemver)
+
 	installer.CheckIfAlreadyInstalled(forceOverwrite)
 	installer.CreateK3dCluster(k3dUseLocalNetwork)
 	installer.CreateNamespace()
 
-	_ = github.MakeFakeRelease(gitBranchName)
-
-	installer.AddUMHRepo()
+	installer.AddUMHRepo(hasFakeRelease)
 	installer.UpdateHelmRepo()
 	installer.InstallHelmRelease(chartSemver)
 

@@ -12,6 +12,7 @@ func InstallHelmRelease(version *semver.Version) {
 	tools.PrintInfo("️ Installing Helm release...", 0)
 	var output []byte
 	var err error
+
 	if version == nil {
 		output, err = exec.Command(
 			"helm",
@@ -47,7 +48,7 @@ func UpdateHelmRepo() {
 	tools.PrintSuccess("Helm repository updated", 1)
 }
 
-func AddUMHRepo() {
+func AddUMHRepo(useFakeRepo bool) {
 	tools.PrintInfo("️ Adding UMH Helm repository...", 0)
 	// Remove old repo if it exists
 	tools.PrintInfo("Removing old UMH Helm repository...", 1)
@@ -59,12 +60,21 @@ func AddUMHRepo() {
 	}
 	// Add new repo
 	tools.PrintInfo("Adding new UMH Helm repository...", 1)
-	output, err = exec.Command(
-		"helm",
-		"repo",
-		"add",
-		"united-manufacturing-hub",
-		"https://repo.umh.app/").CombinedOutput()
+	if useFakeRepo {
+		output, err = exec.Command(
+			"helm",
+			"repo",
+			"add",
+			"united-manufacturing-hub",
+			"http://10.1.1.1").CombinedOutput()
+	} else {
+		output, err = exec.Command(
+			"helm",
+			"repo",
+			"add",
+			"united-manufacturing-hub",
+			"https://repo.umh.app/").CombinedOutput()
+	}
 	if err != nil {
 		tools.PrintErrorAndExit(err, "Error adding UMH Helm repository: ", string(output), 1)
 	}
