@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/Masterminds/semver"
 	"github.com/akamensky/argparse"
 	"github.com/united-manufacturing-hub/autok3d/cmd/checks"
@@ -51,10 +50,9 @@ func main() {
 		tools.PrintErrorAndExit(err, "Error: --version and --git-branch are mutually exclusive", "", 0)
 	}
 
-	fmt.Printf("fO: %v, kUL: %v, cS: %v\n", *forceOverwrite, *k3dUseLocalNetwork, chartSemver)
-
 	checks.CheckIfToolsExist()
-	hasFakeRelease := github.MakeFakeRelease(gitBranchName, chartSemver)
+	var hasFakeRelease bool
+	hasFakeRelease, chartSemver = github.MakeFakeRelease(gitBranchName)
 
 	installer.CheckIfAlreadyInstalled(forceOverwrite)
 	installer.CreateK3dCluster(k3dUseLocalNetwork)
@@ -63,6 +61,10 @@ func main() {
 	installer.AddUMHRepo(hasFakeRelease)
 	installer.UpdateHelmRepo()
 	installer.InstallHelmRelease(chartSemver)
+
+	if hasFakeRelease {
+		installer.PatchRelease(gitBranchName, chartSemver)
+	}
 
 	tools.PrintSuccess("Installation completed successfully", 0)
 	time.Sleep(5 * time.Second)

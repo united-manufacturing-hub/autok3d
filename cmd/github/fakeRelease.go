@@ -22,15 +22,16 @@ import (
 	"sync"
 )
 
-func MakeFakeRelease(gitBranchName *string, semver *semver.Version) bool {
-	err := CreateFakeRelease(gitBranchName, semver)
+func MakeFakeRelease(gitBranchName *string) (bool, *semver.Version) {
+	err, v := CreateFakeRelease(gitBranchName)
 	if err != nil {
 		tools.PrintErrorAndExit(err, "Error creating fake release", "", 1)
 	}
-	return gitBranchName != nil
+
+	return gitBranchName != nil, v
 }
 
-func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err error) {
+func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Version) {
 	tools.PrintInfo("Creating fake release for branch %s", 0, *gitBranchName)
 	if *gitBranchName == "" {
 		return
@@ -39,7 +40,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 	var pullRequests GHPulls
 	pullRequests, err = GetPullRequests("united-manufacturing-hub", "united-manufacturing-hub")
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	var pullRequest *GHPull
@@ -49,38 +50,35 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 		}
 	}
 	if pullRequest == nil {
-		return fmt.Errorf("no pull request found for branch %s", *gitBranchName)
+		return fmt.Errorf("no pull request found for branch %s", *gitBranchName), nil
 	}
+
+	version = semver.MustParse(fmt.Sprintf("%d.%d.%d", pullRequest.Number, 0, 0))
 
 	// Create a temp folder
 
 	var tempDir string
 	tempDir, err = os.MkdirTemp("", "autok3d*")
 	if err != nil {
-		return err
+		return err, nil
 	}
 	var repoPath string
 	repoPath, err = DownloadBranch(*gitBranchName, tempDir)
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	tools.PrintInfo("Creating release for branch %s", 1, *gitBranchName)
 
 	fmt.Printf("repoPath: %s\n", repoPath)
 
-	// Replace version: \d+\.\d+\.\d+ with version: 10.0.0-pRId in Chart.yaml
-	// Also replace appVersion: \d+\.\d+\.\d+ with appVersion: 10.0.0-pRId in Chart.yaml
-
 	chartYamlPath := filepath.Join(repoPath, "deployment", "united-manufacturing-hub", "Chart.yaml")
 	chartYamlContent, err := os.ReadFile(chartYamlPath)
 	if err != nil {
-		return err
+		return err, nil
 	}
 
-	versionStr := fmt.Sprintf("1337.0.%d", pullRequest.ID)
-
-	version = semver.MustParse(versionStr)
+	versionStr := fmt.Sprintf("%d.0.0", pullRequest.Number)
 
 	var chartYaml Chart
 	err = yaml.Unmarshal(chartYamlContent, &chartYaml)
@@ -97,7 +95,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 
 	err = os.WriteFile(chartYamlPath, chartYamlContent, 0644)
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	repoIp := "10.1.1.1"
@@ -106,7 +104,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 	// Modify development.yaml
 	development, err := os.ReadFile(path.Join(repoPath, "deployment", "helm-repo", "cloud-init", "development.yaml"))
 	if err != nil {
-		return err
+		return err, nil
 	}
 	developmentStr := string(development)
 	developmentStr = strings.ReplaceAll(developmentStr, "https://repo.umh.app", repoUrl)
@@ -122,7 +120,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 		[]byte(developmentStr),
 		0644)
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	tools.PrintInfo("Uploading development.yaml to %s", 1, repoIpSSH)
@@ -133,7 +131,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 	var scpClientUpDevYaml scp.Client
 	scpClientUpDevYaml, err = scp.NewClientBySSH(sshClientUpDevYaml.UnderlyingClient())
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	h := sha3.New256()
@@ -149,7 +147,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 		"0644",
 		int64(len([]byte(developmentStr))))
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	tools.PrintSuccess("Uploaded development.yaml to %s", 2, repoIpSSH)
@@ -170,7 +168,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 	helmRepoIndex.Dir = path.Join(repoPath, "deployment", "helm-repo")
 	_, err = helmRepoIndex.Output()
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	tools.PrintSuccess("Created helm repo index", 2)
@@ -180,17 +178,17 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 	var scpClient1 scp.Client
 	scpClient1, err = scp.NewClientBySSH(sshClient1.UnderlyingClient())
 	if err != nil {
-		return err
+		return err, nil
 	}
 
 	var serverIndex *os.File
 	serverIndex, err = os.CreateTemp(os.TempDir(), "index.yaml")
 	if err != nil {
-		return err
+		return err, nil
 	}
 	err = scpClient1.CopyFromRemote(context.Background(), serverIndex, "/www/index.yaml")
 	if err != nil {
-		return err
+		return err, nil
 	}
 	defer func() {
 		scpClient1.Close()
@@ -199,7 +197,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 
 	err = serverIndex.Close()
 	if err != nil {
-		return err
+		return err, nil
 	}
 	tools.PrintSuccess("Uploaded helm chart to %s", 2, repoIpSSH)
 
@@ -211,12 +209,12 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 
 	serverIndexF, err := os.ReadFile(serverIndex.Name())
 	if err != nil {
-		return err
+		return err, nil
 	}
 	var serverIndexYaml IndexYaml
 	err = yaml.Unmarshal(serverIndexF, &serverIndexYaml)
 	if err != nil {
-		return err
+		return err, nil
 	}
 	var present bool
 	for _, version := range serverIndexYaml.Entries.UnitedManufacturingHub {
@@ -232,19 +230,19 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 		var scpClient2 scp.Client
 		scpClient2, err = scp.NewClientBySSH(sshClient2.UnderlyingClient())
 		if err != nil {
-			return err
+			return err, nil
 		}
 
 		// Read local index
 		var index []byte
 		index, err = os.ReadFile(path.Join(repoPath, "deployment", "helm-repo", "index.yaml"))
 		if err != nil {
-			return err
+			return err, nil
 		}
 		var localIndexYaml IndexYaml
 		err = yaml.Unmarshal(index, &localIndexYaml)
 		if err != nil {
-			return err
+			return err, nil
 		}
 		var local UnitedManufacturingHub
 		var foundLocal bool
@@ -256,7 +254,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 			}
 		}
 		if !foundLocal {
-			return fmt.Errorf("could not find local version %s", versionStr)
+			return fmt.Errorf("could not find local version %s", versionStr), nil
 		}
 
 		serverIndexYaml.Entries.UnitedManufacturingHub = append(serverIndexYaml.Entries.UnitedManufacturingHub, local)
@@ -266,14 +264,14 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 		var newServerIndexYaml []byte
 		newServerIndexYaml, err = yaml.Marshal(serverIndexYaml)
 		if err != nil {
-			return err
+			return err, nil
 		}
 		newServerIndexYaml = []byte(strings.ReplaceAll(string(newServerIndexYaml), "https://repo.umh.app", repoUrl))
 
 		reader := bytes.NewReader(newServerIndexYaml)
 		err = scpClient2.Copy(context.Background(), reader, "/www/index.yaml", "0644", int64(len(newServerIndexYaml)))
 		if err != nil {
-			return err
+			return err, nil
 		}
 
 		defer func() {
@@ -289,7 +287,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 
 	helmFiles, err := os.ReadDir(path.Join(repoPath, "deployment", "helm-repo"))
 	if err != nil {
-		return err
+		return err, nil
 	}
 	await.Add(len(helmFiles))
 	for _, file := range helmFiles {
@@ -306,7 +304,7 @@ func CreateFakeRelease(gitBranchName *string, version *semver.Version) (err erro
 
 	tools.PrintSuccess(fmt.Sprintf("Cloudconfig: http://%s/testyamls/%s.yaml", repoIp, hashHex), 2)
 
-	return nil
+	return nil, version
 }
 
 var await = sync.WaitGroup{}
