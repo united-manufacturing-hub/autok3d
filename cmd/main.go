@@ -8,6 +8,7 @@ import (
 	"github.com/united-manufacturing-hub/autok3d/cmd/installer"
 	"github.com/united-manufacturing-hub/autok3d/cmd/tools"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -52,11 +53,15 @@ func main() {
 
 	checks.CheckIfToolsExist()
 	var hasFakeRelease bool
-	hasFakeRelease, chartSemver = github.MakeFakeRelease(gitBranchName)
+	hasFakeRelease = gitBranchName != nil && *gitBranchName != ""
 
-	installer.CheckIfAlreadyInstalled(forceOverwrite)
-	installer.CreateK3dCluster(k3dUseLocalNetwork)
-	installer.CreateNamespace()
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go recreateCluster(forceOverwrite, k3dUseLocalNetwork, &wg)
+	if hasFakeRelease {
+		chartSemver = github.MakeFakeRelease(gitBranchName)
+	}
+	wg.Wait()
 
 	installer.AddUMHRepo(hasFakeRelease)
 	installer.UpdateHelmRepo()
@@ -68,4 +73,11 @@ func main() {
 
 	tools.PrintSuccess("Installation completed successfully", 0)
 	time.Sleep(5 * time.Second)
+}
+
+func recreateCluster(forceOverwrite *bool, k3dUseLocalNetwork *bool, wg *sync.WaitGroup) {
+	defer wg.Done()
+	installer.CheckIfAlreadyInstalled(forceOverwrite)
+	installer.CreateK3dCluster(k3dUseLocalNetwork)
+	installer.CreateNamespace()
 }

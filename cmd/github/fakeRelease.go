@@ -22,13 +22,13 @@ import (
 	"sync"
 )
 
-func MakeFakeRelease(gitBranchName *string) (bool, *semver.Version) {
+func MakeFakeRelease(gitBranchName *string) *semver.Version {
 	err, v := CreateFakeRelease(gitBranchName)
 	if err != nil {
 		tools.PrintErrorAndExit(err, "Error creating fake release", "", 1)
 	}
 
-	return gitBranchName != nil, v
+	return v
 }
 
 func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Version) {

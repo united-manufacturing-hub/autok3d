@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 func PatchRelease(branchName *string, version *semver.Version) {
@@ -23,7 +24,9 @@ func PatchRelease(branchName *string, version *semver.Version) {
 	umhDockerRegex := regexp.MustCompile(`(unitedmanufacturinghub[-\w]*/[-\w]+):([.\-\w]*)`)
 	// For each line in output, skipping the first
 	// 	- Split line by space
-	for i, s := range strings.Split(string(output), "\n") {
+	splits := strings.Split(string(output), "\n")
+	wg := sync.WaitGroup{}
+	for i, s := range splits {
 		if i == 0 {
 			continue
 		}
@@ -34,10 +37,13 @@ func PatchRelease(branchName *string, version *semver.Version) {
 		}
 		deploymentName := deploymentNameRaw[0]
 
-		patchContainer(deploymentName, umhDockerRegex, version, branchName, false)
-		patchContainer(deploymentName, umhDockerRegex, version, branchName, true)
+		wg.Add(2)
+		go patchContainer(deploymentName, umhDockerRegex, version, branchName, false, &wg)
+		go patchContainer(deploymentName, umhDockerRegex, version, branchName, true, &wg)
 
 	}
+
+	wg.Wait()
 
 }
 
@@ -46,7 +52,9 @@ func patchContainer(
 	umhDockerRegex *regexp.Regexp,
 	version *semver.Version,
 	branchName *string,
-	isInitContainer bool) {
+	isInitContainer bool,
+	wg *sync.WaitGroup) {
+	defer wg.Done()
 	var output []byte
 	var err error
 
