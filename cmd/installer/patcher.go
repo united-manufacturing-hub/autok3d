@@ -34,70 +34,71 @@ func PatchRelease(branchName *string, version *semver.Version) {
 		}
 		deploymentName := deploymentNameRaw[0]
 
-		output, err = exec.Command(
-			"kubectl",
-			"get",
-			"deployment",
-			"-n",
-			"united-manufacturing-hub",
-			deploymentName,
-			"-o",
-			"jsonpath='{.spec.template.spec.containers[0].image}'").CombinedOutput()
-		if err != nil {
-			tools.PrintErrorAndExit(err, "Error executing kubectl get deployment", string(output), 1)
-		}
-
-		umhDockerVersion := umhDockerRegex.FindStringSubmatch(string(output))
-		if len(umhDockerVersion) == 0 {
-			continue
-		}
-
-		if umhDockerVersion[2] != version.String() {
-			continue
-		}
-
-		tools.PrintSuccess(fmt.Sprintf("Patching deployment %s", deploymentName), 2)
-
-		branchNameSplit := strings.Split(*branchName, "/")
-		bN := &branchNameSplit[len(branchNameSplit)-1]
-
-		output, err = exec.Command(
-			"kubectl",
-			"patch",
-			"deployment",
-			"-n",
-			"united-manufacturing-hub",
-			deploymentName,
-			"--type=json",
-			"-p",
-			fmt.Sprintf(
-				"[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/image\", \"value\": \"%s:%s\"}]",
-				umhDockerVersion[1],
-				*bN)).CombinedOutput()
-		if err != nil {
-			tools.PrintErrorAndExit(err, "Error executing kubectl set image", string(output), 1)
-		}
-
-		// try patch init container
-		output, err = exec.Command(
-			"kubectl",
-			"patch",
-			"deployment",
-			"-n",
-			"united-manufacturing-hub",
-			deploymentName,
-			"--type=json",
-			"-p",
-			fmt.Sprintf(
-				"[{\"op\": \"replace\", \"path\": \"/spec/template/spec/initContainers/0/image\", \"value\": \"%s:%s\"}]",
-				umhDockerVersion[1],
-				*bN)).CombinedOutput()
-		if err != nil {
-			tools.PrintWarning(
-				fmt.Sprintf("Error executing kubectl set image for init container: %s", string(output)),
-				2)
-		}
+		patchContainer(deploymentName, umhDockerRegex, version, branchName, false)
+		patchContainer(deploymentName, umhDockerRegex, version, branchName, true)
 
 	}
 
+}
+
+func patchContainer(
+	deploymentName string,
+	umhDockerRegex *regexp.Regexp,
+	version *semver.Version,
+	branchName *string,
+	isInitContainer bool) {
+	var output []byte
+	var err error
+
+	var c string
+	if isInitContainer {
+		c = "initContainers"
+	} else {
+		c = "containers"
+	}
+
+	output, err = exec.Command(
+		"kubectl",
+		"get",
+		"deployment",
+		"-n",
+		"united-manufacturing-hub",
+		deploymentName,
+		"-o",
+		fmt.Sprintf("jsonpath='{.spec.template.spec.%s[0].image}'", c)).CombinedOutput()
+	if err != nil {
+		tools.PrintErrorAndExit(err, "Error executing kubectl get deployment", string(output), 1)
+	}
+
+	umhDockerVersion := umhDockerRegex.FindStringSubmatch(string(output))
+	if len(umhDockerVersion) == 0 {
+		return
+	}
+
+	if umhDockerVersion[2] != version.String() {
+		return
+	}
+
+	tools.PrintSuccess(fmt.Sprintf("Patching deployment %s", deploymentName), 2)
+
+	branchNameSplit := strings.Split(*branchName, "/")
+	bN := &branchNameSplit[len(branchNameSplit)-1]
+
+	output, err = exec.Command(
+		"kubectl",
+		"patch",
+		"deployment",
+		"-n",
+		"united-manufacturing-hub",
+		deploymentName,
+		"--type=json",
+		"-p",
+		fmt.Sprintf(
+			"[{\"op\": \"replace\", \"path\": \"/spec/template/spec/%s/0/image\", \"value\": \"%s:%s\"}]",
+			c,
+			umhDockerVersion[1],
+			*bN)).CombinedOutput()
+	if err != nil {
+		tools.PrintWarning("Error executing kubectl set image: %s | %s", 1, string(output), err)
+	}
 }
