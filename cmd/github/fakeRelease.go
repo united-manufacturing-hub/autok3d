@@ -253,7 +253,7 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 		tools.PrintWarning("Error removing downloaded repo", 2)
 	}
 
-	tools.PrintSuccess(fmt.Sprintf("Cloudconfig: %s/testyamls/%s.yaml", repoUrl, hashHex), 2)
+	tools.PrintSuccess(fmt.Sprintf("Cloudconfig: %s/%s.yaml", repoUrl, hashHex), 2)
 
 	return nil, version
 }
