@@ -66,7 +66,7 @@ func AddUMHRepo(useFakeRepo bool) {
 			"repo",
 			"add",
 			"united-manufacturing-hub",
-			"http://10.1.1.1").CombinedOutput()
+			"https://test-repo.umh.app").CombinedOutput()
 	} else {
 		output, err = exec.Command(
 			"helm",

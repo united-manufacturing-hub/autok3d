@@ -2,13 +2,9 @@ package github
 
 import (
 	"archive/zip"
-	"bytes"
-	"context"
 	"fmt"
 	"github.com/Masterminds/semver"
-	"github.com/bramvdbogaerde/go-scp"
 	"github.com/schollz/progressbar/v3"
-	"github.com/united-manufacturing-hub/autok3d/cmd/ssh"
 	"github.com/united-manufacturing-hub/autok3d/cmd/tools"
 	"golang.org/x/crypto/sha3"
 	"gopkg.in/yaml.v3"
@@ -20,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 func MakeFakeRelease(gitBranchName *string) *semver.Version {
@@ -98,9 +95,7 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 		return err, nil
 	}
 
-	repoIp := "10.1.1.1"
-	repoUrl := fmt.Sprintf("http://%s", repoIp)
-	repoIpSSH := fmt.Sprintf("%s:22", repoIp)
+	repoUrl := "https://test-repo.umh.app"
 	// Modify development.yaml
 	development, err := os.ReadFile(path.Join(repoPath, "deployment", "helm-repo", "cloud-init", "development.yaml"))
 	if err != nil {
@@ -123,34 +118,17 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 		return err, nil
 	}
 
-	tools.PrintInfo("Uploading development.yaml to %s", 1, repoIpSSH)
-
-	helmRepoSSHPass := "Shudder2-Luxurious-Stump-Suffrage"
-
-	sshClientUpDevYaml := ssh.GetSSHClient(repoIpSSH, "root", helmRepoSSHPass, 10)
-	var scpClientUpDevYaml scp.Client
-	scpClientUpDevYaml, err = scp.NewClientBySSH(sshClientUpDevYaml.UnderlyingClient())
-	if err != nil {
-		return err, nil
-	}
+	tools.PrintInfo("Uploading development.yaml to %s", 1, repoUrl)
 
 	h := sha3.New256()
 	h.Write([]byte(developmentStr))
 	hashHex := fmt.Sprintf("%x", h.Sum(nil))
 
 	remoteName := fmt.Sprintf("%s.yaml", hashHex)
-	devReader := bytes.NewReader([]byte(developmentStr))
-	err = scpClientUpDevYaml.Copy(
-		context.Background(),
-		devReader,
-		fmt.Sprintf("/www/testyamls/%s", remoteName),
-		"0644",
-		int64(len([]byte(developmentStr))))
-	if err != nil {
-		return err, nil
-	}
 
-	tools.PrintSuccess("Uploaded development.yaml to %s", 2, repoIpSSH)
+	upload(remoteName, []byte(developmentStr))
+
+	tools.PrintSuccess("Uploaded development.yaml to %s", 2, repoUrl)
 
 	tools.PrintInfo("Packaging helm chart", 1)
 	helmPackage := exec.Command("helm", "package", "../united-manufacturing-hub")
@@ -173,65 +151,46 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 
 	tools.PrintSuccess("Created helm repo index", 2)
 
-	tools.PrintInfo("Uploading helm chart to %s", 1, repoIpSSH)
-	sshClient1 := ssh.GetSSHClient(repoIpSSH, "root", helmRepoSSHPass, 10)
-	var scpClient1 scp.Client
-	scpClient1, err = scp.NewClientBySSH(sshClient1.UnderlyingClient())
-	if err != nil {
-		return err, nil
-	}
-
+	tools.PrintInfo("Downloading helm chart to %s", 1, repoUrl)
 	var serverIndex *os.File
 	serverIndex, err = os.CreateTemp(os.TempDir(), "index.yaml")
-	if err != nil {
-		return err, nil
-	}
-	err = scpClient1.CopyFromRemote(context.Background(), serverIndex, "/www/index.yaml")
-	if err != nil {
-		return err, nil
-	}
-	defer func() {
-		scpClient1.Close()
-		_ = sshClient1.Close()
-	}()
-
-	err = serverIndex.Close()
-	if err != nil {
-		return err, nil
-	}
-	tools.PrintSuccess("Uploaded helm chart to %s", 2, repoIpSSH)
+	hasDownloaded := download("index.yaml", serverIndex)
+	tools.PrintSuccess("Downloaded helm chart to %s", 2, repoUrl)
 
 	tools.PrintInfo("Check if release is already in index", 1)
 	// Cleanup server index.yaml after we're done
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(serverIndex.Name())
-
-	serverIndexF, err := os.ReadFile(serverIndex.Name())
-	if err != nil {
-		return err, nil
-	}
-	var serverIndexYaml IndexYaml
-	err = yaml.Unmarshal(serverIndexF, &serverIndexYaml)
-	if err != nil {
-		return err, nil
-	}
+	/*
+		defer func(name string) {
+			_ = os.Remove(name)
+		}(serverIndex.Name())
+	*/
 	var present bool
-	for _, version := range serverIndexYaml.Entries.UnitedManufacturingHub {
-		if version.Version == versionStr {
-			present = true
-			break
-		}
-	}
-
-	if !present {
-		tools.PrintInfo("Adding fake release to server index.yaml", 2)
-		sshClient2 := ssh.GetSSHClient(repoIpSSH, "root", helmRepoSSHPass, 10)
-		var scpClient2 scp.Client
-		scpClient2, err = scp.NewClientBySSH(sshClient2.UnderlyingClient())
+	var serverIndexYaml IndexYaml
+	if hasDownloaded {
+		serverIndexF, err := os.ReadFile(serverIndex.Name())
 		if err != nil {
 			return err, nil
 		}
+
+		tools.PrintInfo("Downloaded to %s", 2, serverIndex.Name())
+
+		err = yaml.Unmarshal(serverIndexF, &serverIndexYaml)
+		if err != nil {
+			return err, nil
+		}
+		for _, version := range serverIndexYaml.Entries.UnitedManufacturingHub {
+			if version.Version == versionStr {
+				present = true
+				break
+			}
+		}
+	}
+	//generated: "2022-11-08T16:07:20.8686554+01:00"
+	serverIndexYaml.Generated = time.Now()
+
+	if !present {
+		tools.PrintInfo("Adding fake release to server index.yaml", 2)
+		serverIndexYaml.APIVersion = "v1"
 
 		// Read local index
 		var index []byte
@@ -268,16 +227,7 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 		}
 		newServerIndexYaml = []byte(strings.ReplaceAll(string(newServerIndexYaml), "https://repo.umh.app", repoUrl))
 
-		reader := bytes.NewReader(newServerIndexYaml)
-		err = scpClient2.Copy(context.Background(), reader, "/www/index.yaml", "0644", int64(len(newServerIndexYaml)))
-		if err != nil {
-			return err, nil
-		}
-
-		defer func() {
-			scpClient2.Close()
-			_ = sshClient2.Close()
-		}()
+		upload("index.yaml", newServerIndexYaml)
 	} else {
 		tools.PrintInfo("Version already present in server index.yaml", 2)
 	}
@@ -285,13 +235,14 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 	// Copy all tgz to server
 	tools.PrintInfo("Copying tgz to server", 1)
 
-	helmFiles, err := os.ReadDir(path.Join(repoPath, "deployment", "helm-repo"))
+	baseDir := path.Join(repoPath, "deployment", "helm-repo")
+	helmFiles, err := os.ReadDir(baseDir)
 	if err != nil {
 		return err, nil
 	}
 	await.Add(len(helmFiles))
 	for _, file := range helmFiles {
-		go CopySCP(file, repoIpSSH, helmRepoSSHPass, repoPath)
+		go uploadFile(file, repoPath, &await, baseDir)
 	}
 	await.Wait()
 
@@ -302,45 +253,12 @@ func CreateFakeRelease(gitBranchName *string) (err error, version *semver.Versio
 		tools.PrintWarning("Error removing downloaded repo", 2)
 	}
 
-	tools.PrintSuccess(fmt.Sprintf("Cloudconfig: http://%s/testyamls/%s.yaml", repoIp, hashHex), 2)
+	tools.PrintSuccess(fmt.Sprintf("Cloudconfig: %s/testyamls/%s.yaml", repoUrl, hashHex), 2)
 
 	return nil, version
 }
 
 var await = sync.WaitGroup{}
-
-func CopySCP(file os.DirEntry, repoIpSSH string, helmRepoSSHPass string, dir string) {
-	defer await.Done()
-	if file.IsDir() {
-		return
-	}
-	if !strings.HasSuffix(file.Name(), ".tgz") {
-		return
-	}
-	tools.PrintInfo("Copying %s", 2, file.Name())
-	sshClientTgz := ssh.GetSSHClient(repoIpSSH, "root", helmRepoSSHPass, 10)
-	var scpClientTgz scp.Client
-	var err error
-	scpClientTgz, err = scp.NewClientBySSH(sshClientTgz.UnderlyingClient())
-	if err != nil {
-		tools.PrintErrorAndExit(err, "Could not create scp client", "", 2)
-	}
-	var reader *os.File
-	reader, err = os.Open(path.Join(dir, "deployment", "helm-repo", file.Name()))
-	if err != nil {
-		tools.PrintErrorAndExit(err, "Could not open file", "", 2)
-	}
-	err = scpClientTgz.CopyFile(context.Background(), reader, fmt.Sprintf("/www/%s", file.Name()), "0644")
-	if err != nil {
-		tools.PrintErrorAndExit(err, "Could not copy file", "", 2)
-	}
-	scpClientTgz.Close()
-	err = sshClientTgz.Close()
-	if err != nil {
-		tools.PrintErrorAndExit(err, "Could not close ssh client", "", 2)
-	}
-
-}
 
 func DownloadBranch(gitBranchName string, dir string) (path string, err error) {
 	tools.PrintInfo("Downloading branch %s", 1, gitBranchName)
