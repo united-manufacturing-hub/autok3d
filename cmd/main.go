@@ -32,7 +32,7 @@ func main() {
 	gitBranchName := parser.String(
 		"",
 		"git-branch",
-		&argparse.Options{Help: "[NYI] Use git branch instead chart version", Required: false})
+		&argparse.Options{Help: "Use git branch instead chart version", Required: false})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
