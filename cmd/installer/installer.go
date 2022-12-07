@@ -131,7 +131,7 @@ func CreateK3dCluster(useLocalNamespace *bool, exposeNodePorts *bool) {
 
 	if *exposeNodePorts {
 		tools.PrintInfo("Exposing node ports...", 1)
-		args = append(args, "--agents", "3", "-p", "\"30000-32767:30000-32767@server:0\"")
+		args = append(args, "--agents", "3", "-p", "\"30000-32767:30000-32767\"")
 	}
 
 	if err != nil {

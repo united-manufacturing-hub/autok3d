@@ -32,7 +32,7 @@ func main() {
 	exposeNodePorts := parser.Flag(
 		"",
 		"expose-node-ports",
-		&argparse.Options{Help: "Exposes 30000-32767:30000-32767@server:0 to host", Required: false})
+		&argparse.Options{Help: "Exposes 30000-32767:30000-32767 to host", Required: false})
 
 	gitBranchName := parser.String(
 		"",
