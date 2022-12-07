@@ -103,7 +103,7 @@ func CreateNamespace() {
 	tools.PrintSuccess("Namespace created", 1)
 }
 
-func CreateK3dCluster(useLocalNamespace *bool) {
+func CreateK3dCluster(useLocalNamespace *bool, exposeNodePorts *bool) {
 	tools.PrintInfo("️ (Re-)creating k3d cluster...", 0)
 
 	// Remove old cluster if it exists
@@ -115,18 +115,23 @@ func CreateK3dCluster(useLocalNamespace *bool) {
 
 	// Create new cluster
 	tools.PrintInfo("Creating new k3d cluster...", 1)
+	args := []string{
+		"cluster",
+		"create",
+		"united-manufacturing-hub",
+	}
+
 	if *useLocalNamespace {
 		tools.PrintInfo("Using local network for k3d cluster", 1)
-		output, err = exec.Command(
-			"k3d",
-			"cluster",
-			"create",
-			"united-manufacturing-hub",
-			"--api-port",
-			"127.0.0.1:6443").CombinedOutput()
+		args = append(args, "--api-port", "127.0.0.1:6443")
 	} else {
 		tools.PrintInfo("Using default network for k3d cluster", 1)
-		output, err = exec.Command("k3d", "cluster", "create", "united-manufacturing-hub").CombinedOutput()
+	}
+	output, err = exec.Command("k3d", args...).CombinedOutput()
+
+	if *exposeNodePorts {
+		tools.PrintInfo("Exposing node ports...", 1)
+		args = append(args, "--agents", "3", "-p", "\"30000-32767:30000-32767@server:0\"")
 	}
 
 	if err != nil {

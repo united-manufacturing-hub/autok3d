@@ -29,6 +29,11 @@ func main() {
 		"k3d-local-network",
 		&argparse.Options{Help: "Enables --api-port 127.0.0.1:6443 for k3d cluster", Required: false})
 
+	exposeNodePorts := parser.Flag(
+		"",
+		"expose-node-ports",
+		&argparse.Options{Help: "Exposes 30000-32767:30000-32767@server:0 to host", Required: false})
+
 	gitBranchName := parser.String(
 		"",
 		"git-branch",
@@ -57,7 +62,7 @@ func main() {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go recreateCluster(forceOverwrite, k3dUseLocalNetwork, &wg)
+	go recreateCluster(forceOverwrite, k3dUseLocalNetwork, exposeNodePorts, &wg)
 	if hasFakeRelease {
 		chartSemver = github.MakeFakeRelease(gitBranchName)
 	}
@@ -75,9 +80,9 @@ func main() {
 	time.Sleep(5 * time.Second)
 }
 
-func recreateCluster(forceOverwrite *bool, k3dUseLocalNetwork *bool, wg *sync.WaitGroup) {
+func recreateCluster(forceOverwrite, k3dUseLocalNetwork, exposeNodePorts *bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	installer.CheckIfAlreadyInstalled(forceOverwrite)
-	installer.CreateK3dCluster(k3dUseLocalNetwork)
+	installer.CreateK3dCluster(k3dUseLocalNetwork, exposeNodePorts)
 	installer.CreateNamespace()
 }
